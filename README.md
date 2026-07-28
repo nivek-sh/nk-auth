@@ -1,4 +1,4 @@
-# @nk/auth
+# @nk-sh/auth
 
 Librería TypeScript basada en Better Auth para componer autenticación en
 servicios existentes. Incluye adaptadores opcionales para Nitro, PostgreSQL,
@@ -11,27 +11,27 @@ su configuración, rutas, secretos y ciclo de vida.
 ## Instalación
 
 ```bash
-pnpm add @nk/auth
+pnpm add @nk-sh/auth
 ```
 
 `better-auth`, `@better-auth/oauth-provider` y `@better-auth/passkey` son
 dependencias directas. Cada integración adicional declara sus tecnologías
 como peers opcionales:
 
-| Entrada             | Dependencias del consumidor                |
-| ------------------- | ------------------------------------------ |
-| `@nk/auth/vue`      | `vue`                                      |
-| `@nk/auth/nitro`    | `nitro`, `zod`                             |
-| `@nk/auth/postgres` | `postgres`, `kysely`, `kysely-postgres-js` |
-| `@nk/auth/resend`   | `resend`                                   |
+| Entrada                | Dependencias del consumidor                |
+| ---------------------- | ------------------------------------------ |
+| `@nk-sh/auth/vue`      | `vue`                                      |
+| `@nk-sh/auth/nitro`    | `nitro`, `zod`                             |
+| `@nk-sh/auth/postgres` | `postgres`, `kysely`, `kysely-postgres-js` |
+| `@nk-sh/auth/resend`   | `resend`                                   |
 
 ## Crear el runtime
 
 ```ts
-import { createAuth } from "@nk/auth";
-import { createNodeScryptPasswordHasher } from "@nk/auth/password/node";
-import { createPostgresAuthDatabase } from "@nk/auth/postgres";
-import { createResendAuthMailer } from "@nk/auth/resend";
+import { createAuth } from "@nk-sh/auth";
+import { createNodeScryptPasswordHasher } from "@nk-sh/auth/password/node";
+import { createPostgresAuthDatabase } from "@nk-sh/auth/postgres";
+import { createResendAuthMailer } from "@nk-sh/auth/resend";
 
 const config = loadApplicationConfig();
 
@@ -83,13 +83,13 @@ librería sólo aporta handlers, middleware y plugins reutilizables.
 
 ```ts
 // server/routes/auth/[...all].ts
-import { createAuthHandler } from "@nk/auth/nitro";
+import { createAuthHandler } from "@nk-sh/auth/nitro";
 import { auth } from "../../utils/auth";
 
 export default createAuthHandler(auth);
 ```
 
-La entrada `@nk/auth/nitro` también exporta:
+La entrada `@nk-sh/auth/nitro` también exporta:
 
 - `createNitroAuthLifecyclePlugin`
 - `createNitroCorsMiddleware`
@@ -106,7 +106,7 @@ incluye handlers Fetch y adaptadores Nitro para ambos documentos.
 Para un `basePath` `/auth`, las rutas calculadas son:
 
 ```ts
-import { getAuthWellKnownPaths } from "@nk/auth/well-known";
+import { getAuthWellKnownPaths } from "@nk-sh/auth/well-known";
 
 getAuthWellKnownPaths("/auth");
 // {
@@ -124,7 +124,7 @@ getAuthWellKnownPaths("/auth");
 import {
     createOAuthAuthorizationServerMetadataHandler,
     createOpenIDConfigurationMetadataHandler,
-} from "@nk/auth/well-known";
+} from "@nk-sh/auth/well-known";
 
 export const authorizationMetadata = createOAuthAuthorizationServerMetadataHandler(auth);
 
@@ -148,7 +148,7 @@ Para exponer el alias RFC 8414 insertado antes del issuer path:
 
 ```ts
 // server/routes/.well-known/oauth-authorization-server/auth.get.ts
-import { createNitroOAuthAuthorizationServerMetadataHandler } from "@nk/auth/nitro";
+import { createNitroOAuthAuthorizationServerMetadataHandler } from "@nk-sh/auth/nitro";
 import { auth } from "../../../utils/auth";
 
 export default createNitroOAuthAuthorizationServerMetadataHandler(auth);
@@ -158,7 +158,7 @@ Si el catch-all no recibe la ruta OpenID:
 
 ```ts
 // server/routes/auth/.well-known/openid-configuration.get.ts
-import { createNitroOpenIDConfigurationMetadataHandler } from "@nk/auth/nitro";
+import { createNitroOpenIDConfigurationMetadataHandler } from "@nk-sh/auth/nitro";
 import { auth } from "../../../utils/auth";
 
 export default createNitroOpenIDConfigurationMetadataHandler(auth);
@@ -168,7 +168,7 @@ export default createNitroOpenIDConfigurationMetadataHandler(auth);
 
 ```ts
 import { createApp } from "vue";
-import { createAuthVuePlugin } from "@nk/auth/vue";
+import { createAuthVuePlugin } from "@nk-sh/auth/vue";
 
 const app = createApp(App);
 const authVue = createAuthVuePlugin();
@@ -216,7 +216,7 @@ La migración SQL se publica dentro del paquete, pero nunca se ejecuta
 automáticamente:
 
 ```ts
-import { applyAuthMigrations, getAuthSchemaVersion } from "@nk/auth/postgres";
+import { applyAuthMigrations, getAuthSchemaVersion } from "@nk-sh/auth/postgres";
 
 const currentVersion = await getAuthSchemaVersion(database);
 const plan = await applyAuthMigrations(database, { dryRun: true });
@@ -275,30 +275,66 @@ versionarse.
 ## Publicación
 
 El campo `files` de `package.json` funciona como lista permitida, por lo que el
-tarball sólo contiene `dist`, `README.md` y `package.json`; no hace falta
-ignorar `src` ni crear un `.npmignore`.
+tarball sólo contiene `dist`, `README.md`, `LICENSE` y `package.json`; no hace
+falta ignorar `src` ni crear un `.npmignore`.
+
+La librería se distribuye bajo licencia MIT a nombre de Kevin Rojas.
 
 Antes de la primera publicación:
 
-1. Verifica que la cuenta u organización sea propietaria del scope `@nk`.
-2. Actualiza la versión del paquete.
-3. Decide la licencia. Actualmente figura `UNLICENSED`, apropiada para un
-   registry privado; para distribución pública se debe escoger una licencia y
-   agregar su archivo `LICENSE`.
-4. Añade `repository`, `homepage` y `bugs` cuando exista el repositorio remoto.
+1. Crea una cuenta en npm, verifica su correo y habilita autenticación en dos
+   pasos.
+2. Asegura que esa cuenta sea propietaria de la organización `nk-sh` o tenga
+   permisos de publicación dentro de ella.
+3. Inicia sesión interactivamente en npm con una cuenta que pueda publicar en
+   `@nk-sh`. Nunca guardes esa sesión o sus credenciales en el repositorio.
 
-Publicación pública en npm:
-
-```bash
-pnpm pack:dry-run
-pnpm publish --access public
-```
-
-Para un registry privado:
+Como `@nk-sh/auth` aún no existe en npm, la primera versión crea el paquete de
+forma interactiva:
 
 ```bash
-pnpm publish --registry https://registry.example.com
+npm login
+npm whoami
+pnpm check
+npm publish --access public --tag alpha
 ```
 
-No se debe guardar un token npm dentro del repositorio. Para CI es preferible
-usar trusted publishing/OIDC.
+Después configura el trusted publisher para las versiones siguientes:
+
+```bash
+npm trust github @nk-sh/auth \
+    --file publish.yml \
+    --repo nivek-sh/nk-auth \
+    --allow-publish
+```
+
+La misma configuración se puede realizar en npmjs.com usando exactamente:
+
+- Organización o usuario de GitHub: `nivek-sh`
+- Repositorio: `nk-auth`
+- Workflow: `publish.yml`
+- Environment: vacío
+- Acción permitida: `npm publish`
+
+El workflow `.github/workflows/publish.yml` ejecuta todas las validaciones y
+publica mediante OIDC cuando se sube un tag `v*`. Las versiones prerelease
+usan automáticamente su identificador como dist-tag: `0.0.1-alpha.0` se publica
+como `alpha`, mientras una versión estable se publica como `latest`.
+
+La versión experimental se instala explícitamente con:
+
+```bash
+npm install @nk-sh/auth@alpha
+```
+
+Para publicar la siguiente alpha, la versión y el tag deben coincidir:
+
+```bash
+pnpm version 0.0.1-alpha.1 --no-git-tag-version
+git add package.json
+git commit -m "release: v0.0.1-alpha.1"
+git tag v0.0.1-alpha.1
+git push origin master v0.0.1-alpha.1
+```
+
+No se usa ni se debe crear un secreto `NPM_TOKEN` para este workflow.

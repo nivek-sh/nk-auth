@@ -1,6 +1,6 @@
 {
-    "name": "@nk/auth",
-    "version": "0.1.0",
+    "name": "@nk-sh/auth",
+    "version": "0.0.1-alpha.0",
     "description": "Reusable authentication runtime and adapters for NK applications",
     "keywords": [
         "authentication",
@@ -11,10 +11,23 @@
         "typescript",
         "vue"
     ],
-    "license": "UNLICENSED",
+    "homepage": "https://github.com/nivek-sh/nk-auth#readme",
+    "bugs": {
+        "url": "https://github.com/nivek-sh/nk-auth/issues"
+    },
+    "license": "MIT",
+    "author": {
+        "name": "Kevin Rojas",
+        "email": "kevin.rojas.nk@gmail.com"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nivek-sh/nk-auth.git"
+    },
     "files": [
         "dist",
-        "README.md"
+        "README.md",
+        "LICENSE"
     ],
     "type": "module",
     "sideEffects": false,
@@ -58,6 +71,10 @@
             "import": "./dist/well-known.js"
         },
         "./package.json": "./package.json"
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org"
     },
     "scripts": {
         "build": "tsdown",

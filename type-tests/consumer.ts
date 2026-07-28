@@ -7,24 +7,24 @@ import {
     type AuthDatabase,
     type AuthMailer,
     type AuthOptions,
-} from "@nk/auth";
+} from "@nk-sh/auth";
 import {
     createApiKeyGuard,
     createAuthHandler,
     createNitroOAuthAuthorizationServerMetadataHandler,
     createNitroOpenIDConfigurationMetadataHandler,
-} from "@nk/auth/nitro";
-import { createNodeScryptPasswordHasher } from "@nk/auth/password/node";
-import { applyAuthMigrations, createPostgresAuthDatabase } from "@nk/auth/postgres";
-import { createNkAuth, type NkAuthOptions } from "@nk/auth/presets/nk";
-import { createResendAuthMailer } from "@nk/auth/resend";
-import { authSchemaVersion, getInitialAuthSchemaURL } from "@nk/auth/schema";
+} from "@nk-sh/auth/nitro";
+import { createNodeScryptPasswordHasher } from "@nk-sh/auth/password/node";
+import { applyAuthMigrations, createPostgresAuthDatabase } from "@nk-sh/auth/postgres";
+import { createNkAuth, type NkAuthOptions } from "@nk-sh/auth/presets/nk";
+import { createResendAuthMailer } from "@nk-sh/auth/resend";
+import { authSchemaVersion, getInitialAuthSchemaURL } from "@nk-sh/auth/schema";
 import {
     createAuthVueClient,
     createAuthVuePlugin,
     createBetterAuthVueClient,
     useAuthClient,
-} from "@nk/auth/vue";
+} from "@nk-sh/auth/vue";
 
 declare const database: AuthDatabase;
 declare const mailer: AuthMailer;

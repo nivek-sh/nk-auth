@@ -92,7 +92,7 @@ export function createAuthVueClient(options: AuthVueClientOptions = {}): AuthVue
     return client;
 }
 
-export const AUTH_VUE_CLIENT_KEY: InjectionKey<AuthVueClient> = Symbol("@nk/auth/vue");
+export const AUTH_VUE_CLIENT_KEY: InjectionKey<AuthVueClient> = Symbol("@nk-sh/auth/vue");
 
 export interface AuthVuePluginOptions extends AuthVueClientOptions {
     injectionKey?: InjectionKey<AuthVueClient>;

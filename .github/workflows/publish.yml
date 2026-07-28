@@ -1,0 +1,65 @@
+name: Publish to npm
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: npm-publish-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    publish:
+        if: github.repository == 'nivek-sh/nk-auth'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v6
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v6
+              with:
+                  node-version: 24
+                  registry-url: https://registry.npmjs.org
+                  package-manager-cache: false
+
+            - name: Verify tag and package version
+              id: package
+              shell: bash
+              run: |
+                  package_version="$(node --print "require('./package.json').version")"
+                  expected_tag="v${package_version}"
+
+                  if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+                      echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${package_version}."
+                      exit 1
+                  fi
+
+                  if [[ "${package_version}" == *-* ]]; then
+                      prerelease="${package_version#*-}"
+                      npm_tag="${prerelease%%.*}"
+                  else
+                      npm_tag="latest"
+                  fi
+
+                  echo "npm_tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
+                  echo "Publishing ${package_version} with npm dist-tag ${npm_tag}."
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Validate package
+              run: pnpm check
+
+            - name: Publish package
+              run: npm publish --access public --tag "${{ steps.package.outputs.npm_tag }}"
