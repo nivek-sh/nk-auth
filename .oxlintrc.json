@@ -1,0 +1,19 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript"],
+    "options": {
+        "typeAware": true,
+        "typeCheck": true,
+        "maxWarnings": 0
+    },
+    "ignorePatterns": [
+        "node_modules/**",
+        "dist/**",
+        "coverage/**",
+        ".cache/**",
+        ".data/**",
+        ".nitro/**",
+        ".output/**",
+        "type-tests/**"
+    ]
+}

@@ -1,0 +1,31 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "semi": true,
+    "tabWidth": 4,
+    "useTabs": false,
+    "singleQuote": false,
+    "printWidth": 100,
+    "bracketSpacing": true,
+    "trailingComma": "all",
+    "ignorePatterns": [
+        "node_modules",
+        "dist",
+        "coverage",
+        ".data",
+        ".nitro",
+        ".cache",
+        ".output",
+        ".pnpm-store",
+        ".env",
+        ".env.*",
+        "*.tgz",
+        "*.tsbuildinfo",
+        "*.log",
+        ".DS_Store",
+        ".gitignore",
+        ".git",
+        "pnpm-lock.yaml",
+        "flake.lock",
+        "schemas/**/*.sql"
+    ]
+}
