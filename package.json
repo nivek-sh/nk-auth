@@ -1,6 +1,6 @@
 {
     "name": "@nk-sh/auth",
-    "version": "0.0.1-alpha.0",
+    "version": "0.0.1-alpha.1",
     "description": "Reusable authentication runtime and adapters for NK applications",
     "keywords": [
         "authentication",
