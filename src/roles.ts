@@ -1,5 +1,9 @@
 import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, userAc } from "better-auth/plugins/admin/access";
+export {
+    defaultAc as organizationAccessControl,
+    defaultRoles as organizationRoles,
+} from "better-auth/plugins/organization/access";
 
 export const accessControl = createAccessControl(defaultStatements);
 
@@ -8,7 +12,8 @@ export const roles = {
         ...adminAc.statements,
     }),
     moderator: accessControl.newRole({
-        ...userAc.statements,
+        user: ["list", "get", "update", "ban"],
+        session: ["list", "revoke"],
     }),
     user: accessControl.newRole({
         ...userAc.statements,
@@ -27,7 +32,7 @@ export function normalizeRoles(input: RoleInput): string[] {
 
 export function hasRoles(
     userRoles: RoleInput,
-    requiredRoles: readonly Role[],
+    requiredRoles: readonly string[],
     mode: RoleMatchMode = "any",
 ): boolean {
     if (requiredRoles.length === 0) return true;

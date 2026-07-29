@@ -73,6 +73,7 @@ async function validateUsername(
 
 function createPlugins(options: AuthOptions): BetterAuthPlugin[] {
     const features = options.features ?? {};
+    const oauthProviderEnabled = Boolean(features.oauthProvider);
     const plugins: BetterAuthPlugin[] = [];
 
     if (features.openAPI) {
@@ -81,15 +82,25 @@ function createPlugins(options: AuthOptions): BetterAuthPlugin[] {
     }
 
     if (features.bearer) {
-        plugins.push(bearer());
+        const bearerOptions = typeof features.bearer === "object" ? features.bearer : {};
+        plugins.push(bearer(bearerOptions));
     }
 
     if (features.admin) {
+        const adminOptions = typeof features.admin === "object" ? features.admin : {};
+        if ((adminOptions.ac === undefined) !== (adminOptions.roles === undefined)) {
+            throw new Error(
+                "features.admin.ac and features.admin.roles must be configured together",
+            );
+        }
+
         plugins.push(
             admin({
-                ac: accessControl,
-                defaultRole: "user",
-                roles,
+                ...adminOptions,
+                ac: adminOptions.ac ?? accessControl,
+                defaultRole: adminOptions.defaultRole ?? "user",
+                adminRoles: adminOptions.adminRoles ?? ["admin", "moderator"],
+                roles: adminOptions.roles ?? roles,
                 schema: adminSchema,
             }),
         );
@@ -98,32 +109,37 @@ function createPlugins(options: AuthOptions): BetterAuthPlugin[] {
     if (features.organization) {
         const organizationOptions =
             typeof features.organization === "object" ? features.organization : {};
-        const allowOrganization = organizationOptions.allowUserToCreateOrganization ?? false;
 
         plugins.push(
             organization({
+                ...organizationOptions,
                 allowUserToCreateOrganization:
-                    typeof allowOrganization === "function"
-                        ? async (user: unknown) => allowOrganization(user)
-                        : async () => allowOrganization,
+                    organizationOptions.allowUserToCreateOrganization ?? false,
                 schema: organizationSchema,
             }),
         );
     }
 
     if (features.username) {
-        plugins.push(username({ schema: usernameSchema }));
+        const usernameOptions = typeof features.username === "object" ? features.username : {};
+        plugins.push(username({ ...usernameOptions, schema: usernameSchema }));
     }
 
     if (features.jwt) {
-        plugins.push(jwt({ schema: jwtSchema }));
+        const jwtOptions = typeof features.jwt === "object" ? features.jwt : {};
+        plugins.push(
+            jwt({
+                ...jwtOptions,
+                disableSettingJwtHeader: jwtOptions.disableSettingJwtHeader ?? oauthProviderEnabled,
+                schema: jwtSchema,
+            }),
+        );
     }
 
     if (features.oauthProvider) {
         plugins.push(
             oauthProvider({
-                loginPage: features.oauthProvider.loginPage,
-                consentPage: features.oauthProvider.consentPage,
+                ...features.oauthProvider,
                 allowDynamicClientRegistration:
                     features.oauthProvider.allowDynamicClientRegistration ?? false,
                 scopes: [...(features.oauthProvider.scopes ?? ["openid", "profile", "email"])],
@@ -133,11 +149,13 @@ function createPlugins(options: AuthOptions): BetterAuthPlugin[] {
     }
 
     if (features.twoFactor) {
-        plugins.push(twoFactor({ schema: twoFactorSchema }));
+        const twoFactorOptions = typeof features.twoFactor === "object" ? features.twoFactor : {};
+        plugins.push(twoFactor({ ...twoFactorOptions, schema: twoFactorSchema }));
     }
 
     if (features.passkey) {
-        plugins.push(passkey({ schema: passkeySchema }));
+        const passkeyOptions = typeof features.passkey === "object" ? features.passkey : {};
+        plugins.push(passkey({ ...passkeyOptions, schema: passkeySchema }));
     }
 
     if (features.captcha) {
@@ -150,7 +168,17 @@ function createPlugins(options: AuthOptions): BetterAuthPlugin[] {
     }
 
     plugins.push(...(options.plugins ?? []));
-    return [...(options.anchors?.transformPlugins?.(plugins) ?? plugins)];
+    const finalPlugins = [...(options.anchors?.transformPlugins?.(plugins) ?? plugins)];
+    if (
+        features.oauthProvider &&
+        features.oauthProvider.disableJwtPlugin !== true &&
+        !finalPlugins.some((plugin) => plugin.id === "jwt")
+    ) {
+        throw new Error(
+            "features.oauthProvider requires features.jwt unless disableJwtPlugin is true",
+        );
+    }
+    return finalPlugins;
 }
 
 export function createAuth(options: AuthOptions): AuthRuntime {
@@ -162,6 +190,8 @@ export function createAuth(options: AuthOptions): AuthRuntime {
     const secureCookies =
         options.security?.secure ?? new URL(options.baseURL).protocol === "https:";
     const plugins = createPlugins(options);
+    const disabledPaths = new Set(options.disabledPaths ?? []);
+    if (options.features?.oauthProvider) disabledPaths.add("/token");
 
     const config: BetterAuthOptions = {
         secret: options.secret,
@@ -170,6 +200,7 @@ export function createAuth(options: AuthOptions): AuthRuntime {
         appName: options.appName,
         database: options.database.configuration,
         trustedOrigins: [...new Set([options.baseURL, ...(options.trustedOrigins ?? [])])],
+        disabledPaths: [...disabledPaths],
         databaseHooks: {
             user: {
                 create: {

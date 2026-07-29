@@ -6,6 +6,7 @@ coverage/
 *.tgz
 *.tsbuildinfo
 *.log
+PUBLISHING.md
 .env
 .env.*
 !.env.example

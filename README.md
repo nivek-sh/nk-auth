@@ -1,31 +1,55 @@
 # @nk-sh/auth
 
-Librería TypeScript basada en Better Auth para componer autenticación en
-servicios existentes. Incluye adaptadores opcionales para Nitro, PostgreSQL,
-Resend y Vue.
+A Better Auth-based TypeScript library for composing authentication into existing services.
+It includes optional adapters for Nitro, PostgreSQL, Resend, and Vue.
 
-La librería no inicia un servidor, no lee variables de entorno y no crea
-conexiones al importarse. La aplicación consumidora conserva el control sobre
-su configuración, rutas, secretos y ciclo de vida.
+The library does not start a server, read environment variables, or create connections when it
+is imported. The consuming application retains control over its configuration, routes, secrets,
+and lifecycle.
 
-## Instalación
+## Installation
 
 ```bash
 pnpm add @nk-sh/auth
 ```
 
-`better-auth`, `@better-auth/oauth-provider` y `@better-auth/passkey` son
-dependencias directas. Cada integración adicional declara sus tecnologías
-como peers opcionales:
+Install `@nk-sh/auth` in every backend or frontend package that imports it. In a monorepo, the
+backend and the Vue application therefore declare it independently.
 
-| Entrada                | Dependencias del consumidor                |
-| ---------------------- | ------------------------------------------ |
-| `@nk-sh/auth/vue`      | `vue`                                      |
-| `@nk-sh/auth/nitro`    | `nitro`, `zod`                             |
-| `@nk-sh/auth/postgres` | `postgres`, `kysely`, `kysely-postgres-js` |
-| `@nk-sh/auth/resend`   | `resend`                                   |
+`better-auth`, `@better-auth/oauth-provider`, and `@better-auth/passkey` are direct dependencies
+of this library. They require no additional installation when an application only imports public
+APIs from `@nk-sh/auth`. If application code imports from any of those packages directly, it must
+also declare that package as its own dependency.
 
-## Crear el runtime
+The adapters below use optional peer dependencies. Optional means that an integration is optional
+for `@nk-sh/auth`; it does not mean the dependency is optional after that integration is used.
+Install these packages directly in the consuming package and do not rely on a package manager to
+install or hoist peers automatically:
+
+| Integration                       | Install in    | Required installation                                 |
+| --------------------------------- | ------------- | ----------------------------------------------------- |
+| `@nk-sh/auth/resend`              | Auth backend  | `pnpm add resend`                                     |
+| `@nk-sh/auth/postgres`            | Auth backend  | `pnpm add postgres kysely kysely-postgres-js`         |
+| `@nk-sh/auth/nitro`               | Nitro backend | `pnpm add nitro zod`                                  |
+| `@nk-sh/auth/vue`                 | Vue frontend  | `pnpm add @nk-sh/auth vue`                            |
+| Core and `@nk-sh/auth/presets/nk` | Auth backend  | No peers beyond the selected database/mailer adapters |
+
+For example, the PostgreSQL and Resend backend shown below needs:
+
+```bash
+pnpm add @nk-sh/auth resend postgres kysely kysely-postgres-js
+```
+
+A Nitro service using the reusable handlers also needs:
+
+```bash
+pnpm add nitro zod
+```
+
+A custom database or mailer implementation does not require the PostgreSQL or Resend peers. Only
+the imported adapter determines those dependencies.
+
+## Creating the runtime
 
 ```ts
 import { createAuth } from "@nk-sh/auth";
@@ -66,10 +90,10 @@ export const auth = createAuth({
 });
 ```
 
-Los secretos pueden provenir de variables de entorno, Vault, Kubernetes
-Secrets u otro proveedor. La librería sólo recibe el objeto ya resuelto.
+Secrets may come from environment variables, Vault, Kubernetes Secrets, or another provider. The
+library only receives the already-resolved configuration object.
 
-La instancia expone un handler Fetch estándar y un cierre idempotente:
+The instance exposes a standard Fetch handler and an idempotent close method:
 
 ```ts
 const response = await auth.handler(request);
@@ -78,8 +102,8 @@ await auth.close();
 
 ## Nitro
 
-Nitro es un peer opcional. El servicio consumidor instala y ejecuta Nitro; la
-librería sólo aporta handlers, middleware y plugins reutilizables.
+Nitro is an optional peer dependency. The consuming service installs and runs Nitro; the library
+only provides reusable handlers, middleware, and plugins.
 
 ```ts
 // server/routes/auth/[...all].ts
@@ -89,21 +113,50 @@ import { auth } from "../../utils/auth";
 export default createAuthHandler(auth);
 ```
 
-La entrada `@nk-sh/auth/nitro` también exporta:
+The `@nk-sh/auth/nitro` entry point also exports:
 
 - `createNitroAuthLifecyclePlugin`
 - `createNitroCorsMiddleware`
 - `createApiKeyGuard`
 - `defineValidatedHandler`
 - `defineAuthHandler`
+- `defineAccessTokenHandler`
 
-## OAuth y rutas well-known
+## Separate auth and application databases
 
-Better Auth puede responder el metadata desde el catch-all de autenticación,
-pero algunos frameworks o clientes necesitan rutas explícitas. La librería
-incluye handlers Fetch y adaptadores Nitro para ambos documentos.
+`nk-auth` owns identity data, credentials, sessions, OAuth clients, global service roles, and
+optional organization membership. Each product application should keep its domain-specific role
+assignments in its own database, using the immutable auth user ID (`sub` in an access token) as the
+external key. Do not add a cross-database foreign key or let application services read the auth
+database directly.
 
-Para un `basePath` `/auth`, las rutas calculadas son:
+A protected app API can validate JWT access tokens locally and then load its own roles:
+
+```ts
+import { createAccessTokenVerifier } from "@nk-sh/auth/resource-server";
+
+export const auth = createAccessTokenVerifier({
+    issuer: "https://auth.example.com/auth",
+    audience: "https://api.example.com",
+    jwksURL: "https://auth.example.com/auth/jwks",
+});
+```
+
+Scopes answer whether a client may call an API. Application permissions answer what the identified
+user may do to a concrete resource. Both must be enforced on the server; Vue checks are only a user
+interface convenience.
+
+See [Authorization with separate application databases](./docs/authorization.md) for the complete
+role model, schema example, custom Better Auth roles, Nitro guards, organization roles, and
+operational guidance.
+
+## OAuth and well-known routes
+
+Better Auth can serve metadata from the authentication catch-all route, but some frameworks or
+clients require explicit routes. The library includes Fetch handlers and Nitro adapters for both
+documents.
+
+For a `/auth` `basePath`, the computed routes are:
 
 ```ts
 import { getAuthWellKnownPaths } from "@nk-sh/auth/well-known";
@@ -118,7 +171,7 @@ getAuthWellKnownPaths("/auth");
 // }
 ```
 
-### Fetch estándar
+### Standard Fetch
 
 ```ts
 import {
@@ -131,7 +184,7 @@ export const authorizationMetadata = createOAuthAuthorizationServerMetadataHandl
 export const openIDMetadata = createOpenIDConfigurationMetadataHandler(auth);
 ```
 
-Ambos aceptan `headers` opcionales para CORS o cache:
+Both handlers accept optional `headers` for CORS or caching:
 
 ```ts
 const metadata = createOAuthAuthorizationServerMetadataHandler(auth, {
@@ -144,7 +197,7 @@ const metadata = createOAuthAuthorizationServerMetadataHandler(auth, {
 
 ### Nitro
 
-Para exponer el alias RFC 8414 insertado antes del issuer path:
+To expose the RFC 8414 alias inserted before the issuer path:
 
 ```ts
 // server/routes/.well-known/oauth-authorization-server/auth.get.ts
@@ -154,7 +207,7 @@ import { auth } from "../../../utils/auth";
 export default createNitroOAuthAuthorizationServerMetadataHandler(auth);
 ```
 
-Si el catch-all no recibe la ruta OpenID:
+If the catch-all route does not receive the OpenID route:
 
 ```ts
 // server/routes/auth/.well-known/openid-configuration.get.ts
@@ -177,17 +230,16 @@ app.use(authVue);
 await authVue.client.signIn.email({ email, password });
 ```
 
-El cliente usa el mismo origen y `/auth` por defecto. Incluye administración,
-organizaciones, username, JWT, 2FA y passkeys.
+The client uses the same origin and `/auth` by default. It includes administration,
+organizations, the OAuth provider client, usernames, JWT, 2FA, and passkeys.
 
-Se puede personalizar con `baseURL`, `basePath`, plugins adicionales y los
-anchors `resolveBaseURL`, `transformPlugins`, `transformOptions`,
-`onClientCreated` y `onVueInstall`.
+It can be customized with `baseURL`, `basePath`, matching admin and organization
+`accessControl`, additional plugins, and the `resolveBaseURL`, `transformPlugins`,
+`transformOptions`, `onClientCreated`, and `onVueInstall` anchors.
 
 ## Emails
 
-Las plantillas de verificación, recuperación y bienvenida son defaults
-reemplazables:
+The verification, password recovery, and welcome templates are replaceable defaults:
 
 ```ts
 const mailer = createResendAuthMailer({
@@ -197,7 +249,7 @@ const mailer = createResendAuthMailer({
     templates: {
         verification(branding, input) {
             return {
-                subject: `Activa tu cuenta en ${branding.appName}`,
+                subject: `Activate your ${branding.appName} account`,
                 html: renderVerification(input),
             };
         },
@@ -210,10 +262,23 @@ const mailer = createResendAuthMailer({
 });
 ```
 
-## PostgreSQL y esquema
+## PostgreSQL and schema
 
-La migración SQL se publica dentro del paquete, pero nunca se ejecuta
-automáticamente:
+The SQL migration is published inside the package, but it is never run automatically:
+
+```bash
+# Preview the migration plan without changing the database.
+pnpm dlx @nk-sh/auth migrate --database-url "$DATABASE_URL" --dry-run
+
+# Apply every pending migration in a transaction.
+pnpm dlx @nk-sh/auth migrate --database-url "$DATABASE_URL"
+
+# Inspect the installed schema version.
+pnpm dlx @nk-sh/auth status --database-url "$DATABASE_URL"
+```
+
+When the package is already installed in a project, use `pnpm exec nk-auth` instead of
+`pnpm dlx @nk-sh/auth`. The CLI validates that the URL uses PostgreSQL and never prints it.
 
 ```ts
 import { applyAuthMigrations, getAuthSchemaVersion } from "@nk-sh/auth/postgres";
@@ -224,10 +289,9 @@ const plan = await applyAuthMigrations(database, { dryRun: true });
 await applyAuthMigrations(database);
 ```
 
-## Extensión
+## Extension
 
-El runtime ofrece puntos de extensión antes y después de construir Better
-Auth:
+The runtime provides extension points before and after creating the Better Auth instance:
 
 ```ts
 const auth = createAuth({
@@ -246,10 +310,20 @@ const auth = createAuth({
 });
 ```
 
-El preset `createNkAuth` también acepta `configure(defaults)` para modificar
-su configuración de alto nivel.
+The `createNkAuth` preset also accepts `configure(defaults)` to modify its high-level
+configuration.
 
-## Desarrollo y empaquetado
+The preset enables the complete built-in server set: OpenAPI, bearer sessions, admin,
+organizations, usernames, JWT/JWKS, OAuth provider, 2FA, and passkeys. A consuming backend may use
+only part of that surface without removing the other capabilities from the central auth service.
+Dynamic organization roles are enabled with the built-in `owner`, `admin`, and `member` access
+control definitions.
+
+When onboarding separate APIs, use `oauthScopes` for their public scopes and
+`oauthValidAudiences` for every accepted resource identifier. The authorization guide covers the
+corresponding token and permission checks.
+
+## Development and packaging
 
 ```bash
 pnpm install
@@ -258,83 +332,17 @@ pnpm check
 pnpm pack:dry-run
 ```
 
-`oxfmt` aplica el formato del repositorio y `oxlint` ejecuta reglas con
-información de tipos y los diagnósticos de TypeScript mediante
-`oxlint-tsgolint`. Se mantiene `tsc` para validar la generación de declaraciones
-y el contrato público consumible.
+`oxfmt` applies the repository formatting rules. `oxlint` runs type-aware rules and TypeScript
+diagnostics through `oxlint-tsgolint`. `tsc` remains part of the checks to validate declaration
+generation and the public consumer contract.
 
-El build usa `tsdown`, genera ESM, tipos y sourcemaps para cada entrada y valida
-el resultado publicable con `publint`. `prepack` ejecuta todas las
-verificaciones, por lo que un clon limpio genera `dist` antes de crear o
-publicar el tarball.
+The build uses `tsdown` to generate ESM, declarations, and source maps for every entry point. The
+publishable result is validated with `publint`. `prepack` runs every check, so a clean clone
+generates `dist` before creating or publishing the tarball.
 
-`dist`, `node_modules`, tarballs y secretos locales permanecen ignorados por
-Git. El código fuente de la librería vive directamente en `src` y sí debe
-versionarse.
+`dist`, `node_modules`, tarballs, and local secrets remain ignored by Git. The library source
+lives directly in `src` and must be versioned.
 
-## Publicación
+## License
 
-El campo `files` de `package.json` funciona como lista permitida, por lo que el
-tarball sólo contiene `dist`, `README.md`, `LICENSE` y `package.json`; no hace
-falta ignorar `src` ni crear un `.npmignore`.
-
-La librería se distribuye bajo licencia MIT a nombre de Kevin Rojas.
-
-Antes de la primera publicación:
-
-1. Crea una cuenta en npm, verifica su correo y habilita autenticación en dos
-   pasos.
-2. Asegura que esa cuenta sea propietaria de la organización `nk-sh` o tenga
-   permisos de publicación dentro de ella.
-3. Inicia sesión interactivamente en npm con una cuenta que pueda publicar en
-   `@nk-sh`. Nunca guardes esa sesión o sus credenciales en el repositorio.
-
-Como `@nk-sh/auth` aún no existe en npm, la primera versión crea el paquete de
-forma interactiva:
-
-```bash
-npm login
-npm whoami
-pnpm check
-npm publish --access public --tag alpha
-```
-
-Después configura el trusted publisher para las versiones siguientes:
-
-```bash
-npm trust github @nk-sh/auth \
-    --file publish.yml \
-    --repo nivek-sh/nk-auth \
-    --allow-publish
-```
-
-La misma configuración se puede realizar en npmjs.com usando exactamente:
-
-- Organización o usuario de GitHub: `nivek-sh`
-- Repositorio: `nk-auth`
-- Workflow: `publish.yml`
-- Environment: vacío
-- Acción permitida: `npm publish`
-
-El workflow `.github/workflows/publish.yml` ejecuta todas las validaciones y
-publica mediante OIDC cuando se sube un tag `v*`. Las versiones prerelease
-usan automáticamente su identificador como dist-tag: `0.0.1-alpha.0` se publica
-como `alpha`, mientras una versión estable se publica como `latest`.
-
-La versión experimental se instala explícitamente con:
-
-```bash
-npm install @nk-sh/auth@alpha
-```
-
-Para publicar la siguiente alpha, la versión y el tag deben coincidir:
-
-```bash
-pnpm version 0.0.1-alpha.1 --no-git-tag-version
-git add package.json
-git commit -m "release: v0.0.1-alpha.1"
-git tag v0.0.1-alpha.1
-git push origin master v0.0.1-alpha.1
-```
-
-No se usa ni se debe crear un secreto `NPM_TOKEN` para este workflow.
+MIT © Kevin Rojas

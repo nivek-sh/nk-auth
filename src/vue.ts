@@ -1,4 +1,5 @@
 import type { BetterAuthClientOptions, BetterAuthClientPlugin } from "better-auth";
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import {
     adminClient,
     jwtClient,
@@ -7,26 +8,46 @@ import {
     usernameClient,
 } from "better-auth/client/plugins";
 import { passkeyClient } from "@better-auth/passkey/client";
-import { createAuthClient } from "better-auth/vue";
+import { createAuthClient, type VueAuthClient } from "better-auth/vue";
 import { inject, type App, type InjectionKey, type Plugin } from "vue";
 
-function createDefaultPlugins() {
+export type AuthVueAdminClientOptions = NonNullable<Parameters<typeof adminClient>[0]>;
+export type AuthVueOrganizationClientOptions = NonNullable<
+    Parameters<typeof organizationClient>[0]
+>;
+
+type CompatibleJwtClientPlugin = Omit<ReturnType<typeof jwtClient>, "getActions"> & {
+    getActions: NonNullable<BetterAuthClientPlugin["getActions"]> &
+        ReturnType<typeof jwtClient>["getActions"];
+};
+
+function createDefaultPlugins(accessControl?: AuthVueAccessControlOptions) {
+    // Better Auth 1.6.25 resolves two @better-fetch/fetch declaration versions internally.
+    // Keep JWT's concrete type for client inference while normalizing its plugin contract.
+    const jwtPlugin = jwtClient() as CompatibleJwtClientPlugin;
+
     return [
-        adminClient(),
-        organizationClient(),
+        adminClient(accessControl?.admin),
+        organizationClient({
+            dynamicAccessControl: {
+                enabled: true,
+            },
+            ...(accessControl?.organization ?? {}),
+        }),
+        oauthProviderClient(),
         usernameClient(),
-        jwtClient(),
+        jwtPlugin,
         twoFactorClient(),
         passkeyClient(),
-    ];
+    ] as const;
 }
 
-type DefaultPlugins = ReturnType<typeof createDefaultPlugins>;
-type DefaultClientOptions = Omit<BetterAuthClientOptions, "plugins"> & {
+type DefaultPlugins = [...ReturnType<typeof createDefaultPlugins>];
+type DefaultClientOptions = {
     plugins: DefaultPlugins;
 };
 
-export type AuthVueClient = ReturnType<typeof createAuthClient<DefaultClientOptions>>;
+export type AuthVueClient = VueAuthClient<DefaultClientOptions>;
 
 export interface AuthVueClientAnchors {
     /**
@@ -47,6 +68,11 @@ export interface AuthVueClientAnchors {
     onVueInstall?(app: App, client: AuthVueClient): void;
 }
 
+export interface AuthVueAccessControlOptions {
+    admin?: AuthVueAdminClientOptions;
+    organization?: AuthVueOrganizationClientOptions;
+}
+
 export interface AuthVueClientOptions extends Omit<BetterAuthClientOptions, "plugins"> {
     /**
      * Defaults to same-origin. Use `basePath` when only the path differs.
@@ -56,6 +82,10 @@ export interface AuthVueClientOptions extends Omit<BetterAuthClientOptions, "plu
      * The default server base path is `/auth`.
      */
     basePath?: string;
+    /**
+     * Match custom server-side admin and organization access control here.
+     */
+    accessControl?: AuthVueAccessControlOptions;
     /**
      * Extra Better Auth plugins appended after the built-in plugin set.
      */
@@ -69,11 +99,12 @@ export function createAuthVueClient(options: AuthVueClientOptions = {}): AuthVue
         plugins: extraPlugins = [],
         baseURL: configuredBaseURL,
         basePath = "/auth",
+        accessControl,
         ...nativeOptions
     } = options;
 
     const defaultPlugins: readonly BetterAuthClientPlugin[] = [
-        ...createDefaultPlugins(),
+        ...createDefaultPlugins(accessControl),
         ...extraPlugins,
     ];
     const plugins = anchors?.transformPlugins?.(defaultPlugins) ?? defaultPlugins;

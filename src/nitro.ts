@@ -1,3 +1,4 @@
+import type { JWTPayload } from "better-auth";
 import { createHash, timingSafeEqual } from "node:crypto";
 import {
     HTTPError,
@@ -10,7 +11,8 @@ import {
 } from "nitro/h3";
 import { definePlugin } from "nitro";
 import { z, type ZodType } from "zod";
-import { hasRoles, type Role, type RoleMatchMode } from "./roles.js";
+import { hasRoles, type RoleMatchMode } from "./roles.js";
+import type { AccessTokenVerifier } from "./resource-server.js";
 import type { AuthSession } from "./types.js";
 import {
     createOAuthAuthorizationServerMetadataHandler,
@@ -268,13 +270,22 @@ export type AuthenticatedContext<TBody, TParams, TQuery> = ValidatedContext<
     session: AuthSession;
 };
 
+export type AuthHandlerAuthorizationContext<TBody, TParams, TQuery> = AuthenticatedContext<
+    TBody,
+    TParams,
+    TQuery
+>;
+
 export type AuthenticatedHandlerOptions<TResponse, TBody, TParams, TQuery> = Omit<
     ValidatedHandlerOptions<TResponse, TBody, TParams, TQuery>,
     "handler"
 > & {
     auth: SessionAuthRuntime;
-    roles: readonly Role[];
+    roles?: readonly string[];
     roleMode?: RoleMatchMode;
+    authorize?(
+        context: AuthHandlerAuthorizationContext<TBody, TParams, TQuery>,
+    ): boolean | Promise<boolean>;
     handler(context: AuthenticatedContext<TBody, TParams, TQuery>): TResponse | Promise<TResponse>;
 };
 
@@ -303,7 +314,10 @@ export function defineAuthHandler<
                 });
             }
 
-            if (!hasRoles(session.user.role, options.roles, options.roleMode ?? "any")) {
+            if (
+                options.roles &&
+                !hasRoles(session.user.role, options.roles, options.roleMode ?? "any")
+            ) {
                 throw new HTTPError({
                     statusCode: 403,
                     statusMessage: "Forbidden",
@@ -316,13 +330,102 @@ export function defineAuthHandler<
             }
 
             const [body, params, query] = await readValidatedInputs(event, options);
-            const response = await options.handler({
+            const context = {
                 session,
                 event,
                 body,
                 params,
                 query,
-            });
+            };
+
+            if (options.authorize && !(await options.authorize(context))) {
+                throw new HTTPError({
+                    statusCode: 403,
+                    statusMessage: "Forbidden",
+                    cause: "The application authorization policy denied access",
+                    data: {
+                        error: "FORBIDDEN_BY_POLICY",
+                        type: "error",
+                    },
+                });
+            }
+
+            const response = await options.handler(context);
+            return validateResponse(options.response, response);
+        },
+    });
+}
+
+export type AccessTokenContext<TBody, TParams, TQuery> = ValidatedContext<
+    TBody,
+    TParams,
+    TQuery
+> & {
+    claims: JWTPayload;
+};
+
+export type AccessTokenHandlerOptions<TResponse, TBody, TParams, TQuery> = Omit<
+    ValidatedHandlerOptions<TResponse, TBody, TParams, TQuery>,
+    "handler"
+> & {
+    auth: AccessTokenVerifier;
+    scopes?: readonly string[];
+    authorize?(context: AccessTokenContext<TBody, TParams, TQuery>): boolean | Promise<boolean>;
+    handler(context: AccessTokenContext<TBody, TParams, TQuery>): TResponse | Promise<TResponse>;
+};
+
+/**
+ * Defines a Nitro resource-server route. The Bearer token is validated before
+ * inputs are read, and application authorization runs before the route handler.
+ */
+export function defineAccessTokenHandler<
+    TResponse = void,
+    TBody = unknown,
+    TParams = unknown,
+    TQuery = unknown,
+>(options: AccessTokenHandlerOptions<TResponse, TBody, TParams, TQuery>) {
+    return defineHandler({
+        middleware: options.middleware,
+        handler: async (event) => {
+            let claims: JWTPayload;
+            try {
+                claims = await options.auth.verifyRequest(event.req, {
+                    scopes: options.scopes,
+                });
+            } catch {
+                throw new HTTPError({
+                    statusCode: 401,
+                    statusMessage: "Unauthorized",
+                    cause: "The access token is missing or invalid",
+                    data: {
+                        error: "UNAUTHORIZED_BY_ACCESS_TOKEN",
+                        type: "error",
+                    },
+                });
+            }
+
+            const [body, params, query] = await readValidatedInputs(event, options);
+            const context = {
+                claims,
+                event,
+                body,
+                params,
+                query,
+            };
+
+            if (options.authorize && !(await options.authorize(context))) {
+                throw new HTTPError({
+                    statusCode: 403,
+                    statusMessage: "Forbidden",
+                    cause: "The application authorization policy denied access",
+                    data: {
+                        error: "FORBIDDEN_BY_POLICY",
+                        type: "error",
+                    },
+                });
+            }
+
+            const response = await options.handler(context);
             return validateResponse(options.response, response);
         },
     });

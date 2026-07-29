@@ -1,5 +1,6 @@
 import {
     createAuth,
+    createPermissionPolicy,
     createOAuthAuthorizationServerMetadataHandler,
     createOpenIDConfigurationMetadataHandler,
     getAuthWellKnownPaths,
@@ -11,12 +12,14 @@ import {
 import {
     createApiKeyGuard,
     createAuthHandler,
+    defineAccessTokenHandler,
     createNitroOAuthAuthorizationServerMetadataHandler,
     createNitroOpenIDConfigurationMetadataHandler,
 } from "@nk-sh/auth/nitro";
 import { createNodeScryptPasswordHasher } from "@nk-sh/auth/password/node";
 import { applyAuthMigrations, createPostgresAuthDatabase } from "@nk-sh/auth/postgres";
 import { createNkAuth, type NkAuthOptions } from "@nk-sh/auth/presets/nk";
+import { createAccessTokenVerifier, getAccessTokenSubject } from "@nk-sh/auth/resource-server";
 import { createResendAuthMailer } from "@nk-sh/auth/resend";
 import { authSchemaVersion, getInitialAuthSchemaURL } from "@nk-sh/auth/schema";
 import {
@@ -42,7 +45,19 @@ const options: AuthOptions = {
     },
     features: {
         bearer: true,
-        jwt: true,
+        jwt: {
+            jwt: {
+                issuer: "https://auth.example.com/auth",
+                audience: "https://api.example.com",
+            },
+        },
+        organization: {
+            creatorRole: "owner",
+            dynamicAccessControl: {
+                enabled: true,
+                maximumRolesPerOrganization: 25,
+            },
+        },
     },
     anchors: {
         transformPlugins(defaultPlugins) {
@@ -64,9 +79,34 @@ const openIDMetadata = createOpenIDConfigurationMetadataHandler(auth);
 const nitroAuthorizationMetadata = createNitroOAuthAuthorizationServerMetadataHandler(auth);
 const nitroOpenIDMetadata = createNitroOpenIDConfigurationMetadataHandler(auth);
 const guard = createApiKeyGuard({ keys: ["secret"] });
+const policy = createPermissionPolicy({
+    viewer: ["invoice:read"],
+    manager: ["invoice:read", "invoice:approve"],
+    owner: ["*"],
+} as const);
+const tokenVerifier = createAccessTokenVerifier({
+    issuer: "https://auth.example.com/auth",
+    audience: "https://api.example.com",
+    jwksURL: "https://auth.example.com/auth/jwks",
+});
+const protectedHandler = defineAccessTokenHandler({
+    auth: tokenVerifier,
+    scopes: ["invoice"],
+    async authorize({ claims }) {
+        const role = claims.appRole;
+        return typeof role === "string" && policy.hasPermissions(role, ["invoice:approve"]);
+    },
+    handler({ claims }) {
+        return { userId: getAccessTokenSubject(claims) };
+    },
+});
 const client = createAuthVueClient({
     baseURL: "https://auth.example.com",
     basePath: "/auth",
+    accessControl: {
+        admin: {},
+        organization: {},
+    },
     anchors: {
         transformPlugins(defaultPlugins) {
             return defaultPlugins;
@@ -116,6 +156,8 @@ const presetOptions: NkAuthOptions = {
     mailer,
     captchaSecretKey: "captcha",
     secureCookie: true,
+    oauthScopes: ["openid", "profile", "email", "invoice:read"],
+    oauthValidAudiences: ["https://api.example.com"],
     configure(defaults) {
         return {
             ...defaults,
@@ -136,6 +178,8 @@ void nitroAuthorizationMetadata;
 void nitroOpenIDMetadata;
 void getAuthWellKnownPaths("/auth");
 void guard;
+void policy.hasPermissions(["manager"], ["invoice:approve"]);
+void protectedHandler;
 void client.signIn;
 void client.admin.createUser;
 void client.passkey.addPasskey;

@@ -1,11 +1,14 @@
 import { createAuth } from "./create-auth.js";
 import { createNodeScryptPasswordHasher } from "./password-node.js";
+import { organizationAccessControl, organizationRoles } from "./roles.js";
 import type {
     AuthDatabase,
     AuthMailer,
     AuthOptions,
     AuthRuntime,
     AuthSessionUser,
+    OAuthProviderFeatureOptions,
+    OrganizationFeatureOptions,
 } from "./types.js";
 
 export const NK_RESTRICTED_USERNAME_WORDS = [
@@ -35,6 +38,8 @@ export interface NkAuthOptions {
     cookieDomain?: string | false;
     loginPage?: string;
     consentPage?: string;
+    oauthScopes?: OAuthProviderFeatureOptions["scopes"];
+    oauthValidAudiences?: readonly string[];
     configure?(defaults: AuthOptions): AuthOptions;
 }
 
@@ -43,7 +48,7 @@ export interface CreateNkUserInput {
         email: string;
         password: string;
         name: string;
-        role?: "admin" | "moderator" | "user";
+        role?: string | string[];
         data?: Record<string, unknown>;
     };
 }
@@ -93,8 +98,6 @@ export function createNkAuth(options: NkAuthOptions): NkAuthRuntime {
             enabled: true,
             autoSignIn: true,
             disableSignUp: true,
-            minPasswordLength: 4,
-            maxPasswordLength: 50,
             requireEmailVerification: true,
             sendVerificationOnSignUp: true,
             sendWelcomeAfterVerification: true,
@@ -102,7 +105,7 @@ export function createNkAuth(options: NkAuthOptions): NkAuthRuntime {
         session: {
             storeSessionInDatabase: true,
             preserveSessionInDatabase: true,
-            expiresIn: 60 * 60 * 24 * 365,
+            expiresIn: 60 * 60 * 24 * 31,
             cookieCache: {
                 maxAge: 5 * 60,
             },
@@ -124,6 +127,14 @@ export function createNkAuth(options: NkAuthOptions): NkAuthRuntime {
             admin: true,
             organization: {
                 allowUserToCreateOrganization: false,
+                // Better Auth exposes OrganizationOptions with a non-generic AccessControl type,
+                // while its own default access control retains narrower statement inference.
+                ac: organizationAccessControl as NonNullable<OrganizationFeatureOptions["ac"]>,
+                roles: organizationRoles,
+                dynamicAccessControl: {
+                    enabled: true,
+                    maximumRolesPerOrganization: 25,
+                },
             },
             username: true,
             jwt: true,
@@ -131,7 +142,12 @@ export function createNkAuth(options: NkAuthOptions): NkAuthRuntime {
                 loginPage: options.loginPage ?? "/sign-in",
                 consentPage: options.consentPage ?? "/consent",
                 allowDynamicClientRegistration: true,
-                scopes: ["openid", "profile", "email", "offline_access"],
+                scopes: [
+                    ...(options.oauthScopes ?? ["openid", "profile", "email", "offline_access"]),
+                ],
+                ...(options.oauthValidAudiences
+                    ? { validAudiences: [...options.oauthValidAudiences] }
+                    : {}),
             },
             twoFactor: true,
             passkey: true,

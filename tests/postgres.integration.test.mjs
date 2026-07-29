@@ -36,7 +36,18 @@ test(
             assert.ok(tableNames.includes("user"));
             assert.ok(tableNames.includes("session"));
             assert.ok(tableNames.includes("oauth_client"));
+            assert.ok(tableNames.includes("organization_role"));
             assert.ok(tableNames.includes("_nk_auth_migrations"));
+
+            const permissionColumns = await database.client.unsafe(
+                `SELECT data_type
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'organization_role'
+           AND column_name = 'permission'`,
+            );
+            assert.equal(permissionColumns.length, 1);
+            assert.equal(permissionColumns[0].data_type, "text");
 
             const current = await applyAuthMigrations(database, { dryRun: true });
             assert.deepEqual(current.pending, []);

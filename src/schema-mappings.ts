@@ -79,6 +79,16 @@ export const organizationSchema = {
             inviterId: "inviter_id",
         },
     },
+    organizationRole: {
+        modelName: "organization_role",
+        fields: {
+            organizationId: "organization_id",
+            role: "role",
+            permission: "permission",
+            createdAt: "created_at",
+            updatedAt: "updated_at",
+        },
+    },
 } as const;
 
 export const usernameSchema = {
@@ -173,6 +183,8 @@ export const twoFactorSchema = {
         fields: {
             userId: "user_id",
             backupCodes: "backup_codes",
+            failedVerificationCount: "failed_verification_count",
+            lockedUntil: "locked_until",
         },
     },
 } as const;

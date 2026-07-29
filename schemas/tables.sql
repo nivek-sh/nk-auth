@@ -16,7 +16,6 @@ CREATE TABLE "user" (
   "phone" TEXT,
   "plan" TEXT
 );
-ALTER TABLE "user" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "session" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -30,7 +29,6 @@ CREATE TABLE "session" (
   "impersonated_by" TEXT,
   "active_organization_id" TEXT
 );
-ALTER TABLE "session" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "account" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -47,7 +45,6 @@ CREATE TABLE "account" (
   "created_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
   "updated_at" TIMESTAMPTZ NOT NULL
 );
-ALTER TABLE "account" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "verification" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -57,7 +54,6 @@ CREATE TABLE "verification" (
   "created_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
   "updated_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-ALTER TABLE "verification" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "organization" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -67,7 +63,6 @@ CREATE TABLE "organization" (
   "created_at" TIMESTAMPTZ NOT NULL,
   "metadata" TEXT
 );
-ALTER TABLE "organization" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "member" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -76,7 +71,6 @@ CREATE TABLE "member" (
   "role" TEXT NOT NULL,
   "created_at" TIMESTAMPTZ NOT NULL
 );
-ALTER TABLE "member" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "invitation" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -88,7 +82,15 @@ CREATE TABLE "invitation" (
   "created_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
   "inviter_id" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE
 );
-ALTER TABLE "invitation" ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE "organization_role" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "organization_id" TEXT NOT NULL REFERENCES "organization" ("id") ON DELETE CASCADE,
+  "role" TEXT NOT NULL,
+  "permission" TEXT NOT NULL,
+  "created_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updated_at" TIMESTAMPTZ
+);
 
 CREATE TABLE "jwks" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -97,7 +99,6 @@ CREATE TABLE "jwks" (
   "created_at" TIMESTAMPTZ NOT NULL,
   "expires_at" TIMESTAMPTZ
 );
-ALTER TABLE "jwks" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "oauth_client" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -131,7 +132,6 @@ CREATE TABLE "oauth_client" (
   "reference_id" TEXT,
   "metadata" JSONB
 );
-ALTER TABLE "oauth_client" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "oauth_refresh_token" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -146,7 +146,6 @@ CREATE TABLE "oauth_refresh_token" (
   "auth_time" TIMESTAMPTZ,
   "scopes" JSONB NOT NULL
 );
-ALTER TABLE "oauth_refresh_token" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "oauth_access_token" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -160,7 +159,6 @@ CREATE TABLE "oauth_access_token" (
   "created_at" TIMESTAMPTZ NOT NULL,
   "scopes" JSONB NOT NULL
 );
-ALTER TABLE "oauth_access_token" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "oauth_consent" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -171,16 +169,16 @@ CREATE TABLE "oauth_consent" (
   "created_at" TIMESTAMPTZ NOT NULL,
   "updated_at" TIMESTAMPTZ NOT NULL
 );
-ALTER TABLE "oauth_consent" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "two_factor" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "secret" TEXT NOT NULL,
   "backup_codes" TEXT NOT NULL,
   "user_id" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-  "verified" BOOLEAN
+  "verified" BOOLEAN,
+  "failed_verification_count" INTEGER,
+  "locked_until" TIMESTAMPTZ
 );
-ALTER TABLE "two_factor" ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "passkey" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -195,7 +193,6 @@ CREATE TABLE "passkey" (
   "created_at" TIMESTAMPTZ,
   "aaguid" TEXT
 );
-ALTER TABLE "passkey" ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX "session_user_id_idx" ON "session" ("user_id");
 CREATE INDEX "account_user_id_idx" ON "account" ("user_id");
@@ -205,6 +202,10 @@ CREATE INDEX "member_organization_id_idx" ON "member" ("organization_id");
 CREATE INDEX "member_user_id_idx" ON "member" ("user_id");
 CREATE INDEX "invitation_organization_id_idx" ON "invitation" ("organization_id");
 CREATE INDEX "invitation_email_idx" ON "invitation" ("email");
+CREATE INDEX "organization_role_organization_id_idx" ON "organization_role" ("organization_id");
+CREATE INDEX "organization_role_role_idx" ON "organization_role" ("role");
+CREATE UNIQUE INDEX "organization_role_organization_role_uidx"
+  ON "organization_role" ("organization_id", "role");
 CREATE INDEX "oauth_client_user_id_idx" ON "oauth_client" ("user_id");
 CREATE INDEX "oauth_refresh_token_client_id_idx" ON "oauth_refresh_token" ("client_id");
 CREATE INDEX "oauth_refresh_token_session_id_idx" ON "oauth_refresh_token" ("session_id");

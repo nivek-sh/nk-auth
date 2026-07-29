@@ -1,4 +1,14 @@
 import type { Auth, BetterAuthOptions, BetterAuthPlugin } from "better-auth";
+import type {
+    AdminOptions,
+    BearerOptions,
+    JwtOptions,
+    OrganizationOptions,
+    TwoFactorOptions,
+    UsernameOptions,
+} from "better-auth/plugins";
+import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
+import type { PasskeyOptions } from "@better-auth/passkey";
 
 export interface VerificationEmail {
     to: string;
@@ -69,16 +79,16 @@ export interface UsernamePolicy {
     validate?(username: string): string | undefined | Promise<string | undefined>;
 }
 
-export interface OrganizationFeatureOptions {
-    allowUserToCreateOrganization?: boolean | ((user: unknown) => boolean | Promise<boolean>);
-}
-
-export interface OAuthProviderFeatureOptions {
-    loginPage: string;
-    consentPage: string;
-    allowDynamicClientRegistration?: boolean;
-    scopes?: readonly string[];
-}
+export type AdminFeatureOptions = Omit<AdminOptions, "schema">;
+export type OrganizationFeatureOptions = Omit<OrganizationOptions, "schema" | "teams">;
+export type JwtFeatureOptions = Omit<JwtOptions, "schema">;
+export type BearerFeatureOptions = BearerOptions;
+export type UsernameFeatureOptions = Omit<UsernameOptions, "schema">;
+export type TwoFactorFeatureOptions = Omit<TwoFactorOptions, "schema">;
+export type PasskeyFeatureOptions = Omit<PasskeyOptions, "schema">;
+export type OAuthProviderFeatureOptions = Omit<OAuthOptions<Scope[]>, "schema" | "scopes"> & {
+    scopes?: readonly Scope[];
+};
 
 export interface CaptchaFeatureOptions {
     provider: "cloudflare-turnstile";
@@ -87,14 +97,14 @@ export interface CaptchaFeatureOptions {
 
 export interface AuthFeatures {
     openAPI?: boolean | { path?: string };
-    bearer?: boolean;
-    admin?: boolean;
+    bearer?: boolean | BearerFeatureOptions;
+    admin?: boolean | AdminFeatureOptions;
     organization?: boolean | OrganizationFeatureOptions;
-    username?: boolean;
-    jwt?: boolean;
+    username?: boolean | UsernameFeatureOptions;
+    jwt?: boolean | JwtFeatureOptions;
     oauthProvider?: false | OAuthProviderFeatureOptions;
-    twoFactor?: boolean;
-    passkey?: boolean;
+    twoFactor?: boolean | TwoFactorFeatureOptions;
+    passkey?: boolean | PasskeyFeatureOptions;
     captcha?: false | CaptchaFeatureOptions;
 }
 
@@ -113,6 +123,7 @@ export interface AuthOptions {
     database: AuthDatabase;
     basePath?: string;
     trustedOrigins?: readonly string[];
+    disabledPaths?: readonly string[];
     mailer?: AuthMailer;
     passwordHasher?: PasswordHasher;
     emailAndPassword?: false | EmailPasswordOptions;

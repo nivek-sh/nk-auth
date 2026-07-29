@@ -4,12 +4,20 @@ import test from "node:test";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import {
     createAuth,
+    createPermissionPolicy,
     createOAuthAuthorizationServerMetadataHandler,
     getAuthWellKnownPaths,
+    hasPermissions,
     hasRoles,
+    normalizePermissions,
     normalizeRoles,
 } from "../dist/index.js";
 import { createApiKeyGuard } from "../dist/nitro.js";
+import {
+    createAccessTokenVerifier,
+    getAccessTokenSubject,
+    getBearerAccessToken,
+} from "../dist/resource-server.js";
 import { createNodeScryptPasswordHasher } from "../dist/password-node.js";
 import {
     createResendAuthMailer,
@@ -25,6 +33,59 @@ test("normalizes Better Auth role strings and supports any/all matching", () => 
     assert.equal(hasRoles(["admin", "moderator"], ["admin", "moderator"], "all"), true);
     assert.equal(hasRoles("user", ["admin"], "all"), false);
     assert.equal(hasRoles(undefined, []), true);
+});
+
+test("evaluates application permissions from one or more assigned roles", () => {
+    const policy = createPermissionPolicy({
+        viewer: ["invoice:read"],
+        manager: ["invoice:read", "invoice:approve"],
+        owner: ["*"],
+    });
+
+    assert.deepEqual(normalizePermissions("invoice:read, invoice:approve"), [
+        "invoice:read",
+        "invoice:approve",
+    ]);
+    assert.equal(hasPermissions(["invoice:read"], ["invoice:read", "invoice:approve"]), false);
+    assert.equal(policy.hasPermissions("viewer,manager", ["invoice:approve"]), true);
+    assert.equal(policy.hasPermissions("viewer", ["invoice:approve"]), false);
+    assert.equal(policy.hasPermissions("owner", ["unlisted:permission"]), true);
+    assert.deepEqual(policy.permissionsFor(["viewer", "manager"]), [
+        "invoice:read",
+        "invoice:approve",
+    ]);
+});
+
+test("rejects ambiguous permission policy definitions", () => {
+    assert.throws(
+        () => createPermissionPolicy({ editor: ["project:read", "project:read"] }),
+        /duplicate permissions/,
+    );
+    assert.throws(() => createPermissionPolicy({ "": ["project:read"] }), /cannot be empty/);
+});
+
+test("extracts Bearer tokens and requires a stable token subject", () => {
+    assert.equal(
+        getBearerAccessToken(new Headers({ authorization: "Bearer access-token" })),
+        "access-token",
+    );
+    assert.equal(
+        getBearerAccessToken(new Headers({ authorization: "bearer access-token extra" })),
+        undefined,
+    );
+    assert.equal(getAccessTokenSubject({ sub: "auth-user-id" }), "auth-user-id");
+    assert.throws(() => getAccessTokenSubject({}), /does not contain a subject/);
+});
+
+test("requires a local JWKS URL or remote introspection for token verification", () => {
+    assert.throws(
+        () =>
+            createAccessTokenVerifier({
+                issuer: "https://auth.example.com/auth",
+                audience: "https://api.example.com",
+            }),
+        /jwksURL or remoteVerification is required/,
+    );
 });
 
 test("API key guard accepts configured keys and rejects invalid headers", async () => {
@@ -241,6 +302,11 @@ test("published schema asset is available and versioned", async () => {
     const schema = await readFile(schemaURL, "utf8");
     assert.match(schema, /CREATE TABLE "user"/);
     assert.match(schema, /CREATE TABLE "oauth_client"/);
+    assert.match(schema, /CREATE TABLE "organization_role"/);
+    assert.match(
+        schema,
+        /CREATE TABLE "organization_role" \([\s\S]*?"permission" TEXT NOT NULL[\s\S]*?\);/,
+    );
 });
 
 test("migration planning is deterministic and side-effect free", () => {

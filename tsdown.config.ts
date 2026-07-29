@@ -2,11 +2,13 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
     entry: {
+        cli: "src/cli.ts",
         index: "src/index.ts",
         nitro: "src/nitro.ts",
         "password-node": "src/password-node.ts",
         postgres: "src/postgres.ts",
         "preset-nk": "src/preset-nk.ts",
+        "resource-server": "src/resource-server.ts",
         resend: "src/resend.ts",
         schema: "src/schema.ts",
         vue: "src/vue.ts",
